@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
 	"os"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ type Config struct {
 	Inbound   bool
 	Outbound  bool
 	Socks     bool
+	TCPOnly   bool
 	KeepAlive time.Duration
 	//ACL optionally checks if a given address (host:port) is allowed.
 	//When set, outbound connections are denied if this returns false.

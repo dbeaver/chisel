@@ -43,6 +43,11 @@ func (t *Tunnel) handleSSHChannel(ctx context.Context, ch ssh.NewChannel) {
 	hostPort, proto := settings.L4Proto(remote)
 	udp := proto == "udp"
 	socks := hostPort == "socks"
+	if t.Config.TCPOnly && (socks || udp) {
+		t.Debugf("Denied non-TCP connection")
+		ch.Reject(ssh.Prohibited, "only TCP connections are allowed")
+		return
+	}
 	if socks && t.socksServer == nil {
 		t.Debugf("Denied socks request, please enable socks")
 		ch.Reject(ssh.Prohibited, "SOCKS5 is not enabled")

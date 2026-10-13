@@ -42,6 +42,25 @@ func TestTargetDialContext(t *testing.T) {
 	}
 }
 
+func TestAcceptServerTCPConnections(t *testing.T) {
+	c, err := NewClient(&Config{AcceptServerTCPConnections: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.tunnel.Outbound {
+		t.Fatal("expected outbound connections to be enabled")
+	}
+	if !c.tunnel.TCPOnly {
+		t.Fatal("expected non-TCP connections to be disabled")
+	}
+	if c.tunnel.Socks {
+		t.Fatal("expected SOCKS to be disabled")
+	}
+	if len(c.computed.Remotes) != 0 {
+		t.Fatalf("expected no declared remotes, got %d", len(c.computed.Remotes))
+	}
+}
+
 func TestCustomHeaders(t *testing.T) {
 	//fake server, records the header for the main goroutine to
 	//assert (t.Fatal must not be called from the handler goroutine)
