@@ -43,6 +43,11 @@ func (t *Tunnel) handleSSHChannel(ctx context.Context, ch ssh.NewChannel) {
 	hostPort, proto := settings.L4Proto(remote)
 	udp := proto == "udp"
 	socks := hostPort == "socks"
+	if t.Config.TCPOnly && (socks || udp) {
+		t.Debugf("Denied non-TCP connection")
+		ch.Reject(ssh.Prohibited, "only TCP connections are allowed")
+		return
+	}
 	if socks && t.socksServer == nil {
 		t.Debugf("Denied socks request, please enable socks")
 		ch.Reject(ssh.Prohibited, "SOCKS5 is not enabled")
@@ -63,8 +68,7 @@ func (t *Tunnel) handleSSHChannel(ctx context.Context, ch ssh.NewChannel) {
 	//a successful connection to a dead target
 	var dst net.Conn
 	if !socks && !udp {
-		d := net.Dialer{Timeout: settings.EnvDuration("DIAL_TIMEOUT", 30*time.Second)}
-		c, err := d.DialContext(ctx, "tcp", hostPort)
+		c, err := t.dialTarget(ctx, "tcp", hostPort)
 		if err != nil {
 			t.Debugf("Failed to dial %s: %s", hostPort, err)
 			ch.Reject(ssh.ConnectionFailed, err.Error())
@@ -100,6 +104,14 @@ func (t *Tunnel) handleSSHChannel(ctx context.Context, ch ssh.NewChannel) {
 		errmsg = fmt.Sprintf(" (error %s)", err)
 	}
 	l.Debugf("Close %s%s", t.connStats.String(), errmsg)
+}
+
+func (t *Tunnel) dialTarget(ctx context.Context, network, addr string) (net.Conn, error) {
+	if t.Config.TargetDialContext != nil {
+		return t.Config.TargetDialContext(ctx, network, addr)
+	}
+	d := net.Dialer{Timeout: settings.EnvDuration("DIAL_TIMEOUT", 30*time.Second)}
+	return d.DialContext(ctx, network, addr)
 }
 
 func (t *Tunnel) handleSocks(src io.ReadWriteCloser) error {

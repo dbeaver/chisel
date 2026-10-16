@@ -1,7 +1,10 @@
 package chclient
 
 import (
+	"context"
 	"crypto/elliptic"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -11,6 +14,52 @@ import (
 	"github.com/jpillora/chisel/share/ccrypto"
 	"golang.org/x/crypto/ssh"
 )
+
+func TestTargetDialContext(t *testing.T) {
+	expectedErr := errors.New("target dial")
+	var gotNetwork string
+	var gotAddr string
+	config := Config{
+		TargetDialContext: func(_ context.Context, network, addr string) (net.Conn, error) {
+			gotNetwork = network
+			gotAddr = addr
+			return nil, expectedErr
+		},
+	}
+	c, err := NewClient(&config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.tunnel.TargetDialContext(context.Background(), "tcp", "database.example:5432")
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected target dial error, got %v", err)
+	}
+	if gotNetwork != "tcp" {
+		t.Fatalf("expected tcp network, got %q", gotNetwork)
+	}
+	if gotAddr != "database.example:5432" {
+		t.Fatalf("expected database address, got %q", gotAddr)
+	}
+}
+
+func TestAcceptServerTCPConnections(t *testing.T) {
+	c, err := NewClient(&Config{AcceptServerTCPConnections: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.tunnel.Outbound {
+		t.Fatal("expected outbound connections to be enabled")
+	}
+	if !c.tunnel.TCPOnly {
+		t.Fatal("expected non-TCP connections to be disabled")
+	}
+	if c.tunnel.Socks {
+		t.Fatal("expected SOCKS to be disabled")
+	}
+	if len(c.computed.Remotes) != 0 {
+		t.Fatalf("expected no declared remotes, got %d", len(c.computed.Remotes))
+	}
+}
 
 func TestCustomHeaders(t *testing.T) {
 	//fake server, records the header for the main goroutine to
